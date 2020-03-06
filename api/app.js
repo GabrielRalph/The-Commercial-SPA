@@ -1,17 +1,17 @@
 const express = require('express');
 const app = express();
-const stripe = require('stripe')('sk_test_TjxMfQT2AWTxxvWFvTAAcpRI00o4FDVzae');
+// const stripe = require('stripe')('sk_test_TjxMfQT2AWTxxvWFvTAAcpRI00o4FDVzae');
 const fs = require('fs');
 var mysql = require('mysql');
 
-var con = mysql.createConnection({
+var thecommercialSQL = mysql.createConnection({
   host: "localhost",
   user: "node",
   password: "N0D3U5ER",
   database: "thecommercial"
 });
 
-var myquerys = require('./myquerys.json');
+var myquerys = require('./querys.json');
 
 
 app.all('/', function(req, res, next) {
@@ -20,109 +20,138 @@ app.all('/', function(req, res, next) {
   next()
 });
 
-con.connect(function(err) {
+thecommercialSQL.connect(function(err) {
+  // Handle errors
   if (err) {
     console.log(err)
   }else{
-    app.get('/secret/:items/:quantity', async (req, res, next) => {
+
+    // Once connection is established with mysql
+    // app.get('/secret/:items/:quantity', async (req, res, next) => {
+    //   res.header("Access-Control-Allow-Origin", "*");
+    //
+    //   var items = req.params.items;
+    //   var quantity = req.params.quantity;
+    //
+    //   var obj = [];
+    //   var regexp1  = RegExp('^([0-9]|,| )*[0-9]$', 'g');
+    //   var regexp2  = RegExp('^([0-9]|,| )*[0-9]$', 'g');
+    //   if(regexp1.test(items)&&regexp2.test(quantity)){
+    //     var query = 'select *, max(list_price) price from artwork_historic_prices where artwork_id in (' + items + ') group by artwork_id';
+    //     con.query(query, function (err, results) {
+    //       if (err|(!results)){
+    //         res.json({error: err.sqlMessage})
+    //         next('\nSQL ERROR:\n'+err.sqlMessage+'\n' +query)
+    //       }else{
+    //         var total = 0;
+    //         quantity = quantity.replace(' ', '').split(',')
+    //         for(var i in results){
+    //           var p = results[i].price
+    //           var q = quantity[i]?quantity[i]:0;
+    //           total += p*q;
+    //           obj.push({price: p, qty: q, subtotal: p*q});
+    //         }
+    //         obj = {cart: obj, total: total};
+    //         if(obj.total){
+    //           (async () => {
+    //             const intent = await stripe.paymentIntents.create({
+    //               amount: total,
+    //               currency: 'aud',
+    //               payment_method_types: ['card'],
+    //             });
+    //             obj['client_secret'] = intent.client_secret;
+    //             console.log(obj)
+    //             res.json(obj);
+    //           })();
+    //         }
+    //       }
+    //     })
+    //   }
+    // });
+
+    app.get('/query/*', async (req, res, next) => {
+
+      // Just hase to be done
       res.header("Access-Control-Allow-Origin", "*");
+      var newQuery = ''
+      var args = req.params[0].split('/')
 
-      var items = req.params.items;
-      var quantity = req.params.quantity;
+      // gets query and replaces %PARAMS% with given paramters
+      while(args.length > 0){
+        var arg = args.shift()
+        newQuery = !!myquerys[arg]?newQuery + myquerys[arg] + ' ':newQuery.replace(/%PARAMS%/, arg);
+      }
 
-      var obj = [];
-      var regexp1  = RegExp('^([0-9]|,| )*[0-9]$', 'g');
-      var regexp2  = RegExp('^([0-9]|,| )*[0-9]$', 'g');
-      if(regexp1.test(items)&&regexp2.test(quantity)){
-        var query = 'select *, max(list_price) price from artwork_historic_prices where artwork_id in (' + items + ') group by artwork_id';
-        con.query(query, function (err, results) {
+      // Just check to see if enough params where given
+      if(newQuery.indexOf('%PARAMS%') != -1){
+        res.json({error: 'Not enough paramters'})
+        next('Not enough paramters')
+      }else{
+
+        // Send the newQuery
+        thecommercialSQL.query(newQuery, function (err, results) {
           if (err|(!results)){
             res.json({error: err.sqlMessage})
-            next('\nSQL ERROR:\n'+err.sqlMessage+'\n' +query)
+            next('\nSQL ERROR:\n'+err.sqlMessage+'\n' +newQuery)
           }else{
-            var total = 0;
-            quantity = quantity.replace(' ', '').split(',')
-            for(var i in results){
-              var p = results[i].price
-              var q = quantity[i]?quantity[i]:0;
-              total += p*q;
-              obj.push({price: p, qty: q, subtotal: p*q});
-            }
-            obj = {cart: obj, total: total};
-            if(obj.total){
-              (async () => {
-                const intent = await stripe.paymentIntents.create({
-                  amount: total,
-                  currency: 'aud',
-                  payment_method_types: ['card'],
-                });
-                obj['client_secret'] = intent.client_secret;
-                console.log(obj)
-                res.json(obj);
-              })();
-            }
+            console.log('--------------\nsucceful query\n-------------\n');
+            res.json(results)
           }
         })
       }
-    });
+      console.log(newQuery);
 
-    app.get('/query/:query_name*', async (req, res, next) => {
-      console.log(req.protocol + '://' + req.get('host') + req.originalUrl);
-      res.header("Access-Control-Allow-Origin", "*");
+      // var ext = '';
+      // if(!!args ){
+      //   args = args.split('/');
+      //   var regexp  = RegExp('^([0-9]|,| )*[0-9]$', 'g');
+      //   if(args[1]&&regexp.test(args[1])){
+      //     ext = args[1];
+      //     if(!!args[2]){
+      //       if(args[2].toUpperCase() == 'BETWEEN'){
+      //         ext = ' BETWEEN ' + ext.replace(',', ' AND ');
+      //       }else if(args[2].toUpperCase() == 'IN'){
+      //         ext = ' IN (' + ext + ')';
+      //       }else{
+      //         res.json({error: 'Invalid operatoin: ' + args[2]});
+      //         next('\nARGUMENT ERROR:\nInvalid operatoin: ' + args[2]);
+      //         return
+      //       }
+      //     }else{
+      //       regexp  = RegExp('^[0-9]*$', 'g');
+      //       if(regexp.test(ext)){
+      //         ext = ' = ' + ext;
+      //       }else{
+      //         res.json({error: 'Invalid arguments: \'' + ext + '\' for given operation \'=\''});
+      //         next('\nARGUMENT ERROR:\nInvalid arguments: \'' + ext + '\' for given operation \'=\'');
+      //         return
+      //       }
+      //     }
+      //   }else{
+      //     res.json({error: 'Invalid arguments: ' + args[1]});
+      //     next('\nARGUMENT ERROR:\nInvalid arguments: ' + args[1]);
+      //     return
+      //   }
+      // }
 
-      var query = myquerys[req.params.query_name];
-      var args = req.params[0];
-      var ext = '';
-      if(!!args ){
-        args = args.split('/');
-        var regexp  = RegExp('^([0-9]|,| )*[0-9]$', 'g');
-        if(args[1]&&regexp.test(args[1])){
-          ext = args[1];
-          if(!!args[2]){
-            if(args[2].toUpperCase() == 'BETWEEN'){
-              ext = ' BETWEEN ' + ext.replace(',', ' AND ');
-            }else if(args[2].toUpperCase() == 'IN'){
-              ext = ' IN (' + ext + ')';
-            }else{
-              res.json({error: 'Invalid operatoin: ' + args[2]});
-              next('\nARGUMENT ERROR:\nInvalid operatoin: ' + args[2]);
-              return
-            }
-          }else{
-            regexp  = RegExp('^[0-9]*$', 'g');
-            if(regexp.test(ext)){
-              ext = ' = ' + ext;
-            }else{
-              res.json({error: 'Invalid arguments: \'' + ext + '\' for given operation \'=\''});
-              next('\nARGUMENT ERROR:\nInvalid arguments: \'' + ext + '\' for given operation \'=\'');
-              return
-            }
-          }
-        }else{
-          res.json({error: 'Invalid arguments: ' + args[1]});
-          next('\nARGUMENT ERROR:\nInvalid arguments: ' + args[1]);
-          return
-        }
-      }
-
-      query += ext;
-      console.log(query);
-      con.query(query, function (err, results) {
-        if (err|(!results)){
-          res.json({error: err.sqlMessage})
-          next('\nSQL ERROR:\n'+err.sqlMessage+'\n' +query)
-        }else{
-          console.log('--------------\nsucceful query\n-------------\n');
-          res.json(results)
-        }
-      })
+      // query += ext;
+      // console.log(query);
+      // con.query(query, function (err, results) {
+      //   if (err|(!results)){
+      //     res.json({error: err.sqlMessage})
+      //     next('\nSQL ERROR:\n'+err.sqlMessage+'\n' +query)
+      //   }else{
+      //     console.log('--------------\nsucceful query\n-------------\n');
+      //     res.json(results)
+      //   }
+      // })
     });
   }
 })
 
 
-app.listen(8080, () => {
-  console.log('Running on port 3000')
+app.listen(8082, () => {
+  console.log('Running on port 8082')
 });
 
 

@@ -41,10 +41,8 @@ export default {
   },
   props:{
     location: {
-      type: Array,
-      default(){
-        return [1,1]
-      }
+      type: String,
+      default: 'home'
     },
     icon: {
       type: String,
@@ -56,8 +54,8 @@ export default {
     }
   },
   methods: {
-    navigate(pos){
-      bus.$emit('navigate', pos, '', '')
+    navigate(location){
+      bus.$emit(location)
     }
   },
   created(){

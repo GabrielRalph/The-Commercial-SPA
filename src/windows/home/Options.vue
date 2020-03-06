@@ -16,7 +16,7 @@
       <template  v-if = "isdown('Artist')">
         <tr v-for = "artist in names" :key = "artist.id">
           <td></td>
-          <td @click = "navigate([2,1], {artists:artist.id, name: artist.first_name+' '+artist.last_name})">
+          <td @click = "filter({artists:artist.id, name: artist.first_name+' '+artist.last_name})">
             <h2>{{artist.first_name}} {{artist.last_name}}</h2>
           </td>
         </tr>
@@ -36,7 +36,7 @@
       <template  v-if = "isdown('Type')">
         <tr v-for = "type in types" :key = "type.id">
           <td></td>
-          <td @click = "navigate([2,1], {types:type.id})">
+          <td @click = "filter({types:type.id})">
             <h2>{{type.description}}</h2>
           </td>
         </tr>
@@ -54,7 +54,7 @@
         </td>
       </tr>
       <tr v-if = "isdown('Scale')">
-        <td @click = "navigate([2,1], {scale: scale})" style = "padding-left: 10pt;"><arrow size = "25pt 2pt" direction = 'right'></arrow></td>
+        <td @click = "filter({scale: scale})" style = "padding-left: 10pt;"><arrow size = "25pt 2pt" direction = 'right'></arrow></td>
         <td style = "padding-top: 22.5pt">
           <slider @change = "setRange($event, 'scale')"></slider>
         </td>
@@ -72,7 +72,7 @@
         </td>
       </tr>
       <tr v-if = "isdown('Price')">
-        <td @click = "navigate([2,1], {price: price})" style = "padding-left: 10pt;">
+        <td @click = "filter({price: price})" style = "padding-left: 10pt;">
           <arrow size = "25pt 2pt" direction = 'right'></arrow>
         </td>
         <td style = "padding-top: 22.5pt">
@@ -85,7 +85,7 @@
 
 <!-- Store -->
     <table style = "margin-top: 40pt">
-      <tr @click = "navigate([0,1])">
+      <tr @click = "shop()">
         <td>
           <h1>Store</h1>
         </td>
@@ -105,14 +105,15 @@
            <arrow size = "6pt 6pt" :direction = "isdown('News')?'up':'down'" float = 'right'></arrow>
         </td>
       </tr>
-      <!-- <template  v-if = "isdown('News')">
-        <tr v-for = "newsitem, key in news" :key = "'news-' + key">
+      <template  v-if = "isdown('News')">
+        <tr v-for = "(newsitem, key) in news" :key = "'news-' + key">
           <td></td>
           <td>
-            <h2>{{newsitem}}</h2>
+            <h3>{{date(newsitem.news_date)}}</h3>
+            <p class = "list_p">{{newsitem.title}}</p>
           </td>
         </tr>
-      </template> -->
+      </template>
     </table>
 
 <!-- Program -->
@@ -128,7 +129,7 @@
       <template  v-if = "isdown('Program')">
         <tr v-for = "programitem in programs" :key = "programitem.id">
           <td></td>
-          <td @click = "navigate([1,0])">
+          <td @click = "program()">
             <h2>{{programitem}}</h2>
           </td>
         </tr>
@@ -150,7 +151,7 @@
 <script>
 /* eslint no-console: ["error", { allow: ["log", "error"] }] */
 
-import {bus} from '../databus.js'
+import {bus} from '../../databus.js'
 export default {
   data(){
     return{
@@ -164,10 +165,14 @@ export default {
     }
   },
   methods: {
-
+    date(utcSeconds){
+      var d = new Date(0); // The 0 there is the key, which sets the date to the epoch
+      d.setUTCSeconds(utcSeconds);
+      return d.getDate() +'/'+ d.getMonth() +'/'+ d.getFullYear()
+    },
     setRange(e, what){
       console.log(e)
-      this[what] = [Math.round(e[0]/10), Math.round(e[1]/10)];
+      this[what] = [e[0] + 1, e[1] + 1];
     },
     dropdown(x){
       if(this.dd.indexOf(x) == -1){
@@ -184,25 +189,39 @@ export default {
     isdown(x){
       return (this.dd.indexOf(x) != -1)
     },
-    navigate(pos, filter){
-      console.log('move')
+    filter(filter){
       var dhl = filter?filter:0;
-      bus.$emit('navigate', pos, dhl, 'filter');
+      localStorage.filter = JSON.stringify(dhl);
+      localStorage.page = 'artworks'
+      bus.$emit('artworks', dhl);
+    },
+    program(){
+      bus.$emit('program')
+    },
+    shop(){
+      bus.$emit('shop')
     }
   },
   created(){
+    bus.$on('home', () => {
+      this.dd = []
+    })
     bus.query('get_names', (names) => {
       this.names = names.sort((a,b)=>{ return a.last_name < b.last_name?-1:(a.last_name > b.last_name?1:0)})
     });
     bus.query('get_types', (types) => {
       this.types = types.sort((a,b)=>{ return a.description < b.description?-1:(a.description > b.description?1:0)})
     });
-
-    bus.$on('navigate', (pos, dhl, name) => {
-      if(name == ''){
-        this.dd = 'null';
-      }
-    })
+    bus.query('get_news', (news) => {
+      this.news = news;
+    });
   }
 }
 </script>
+<style>
+.list_p{
+  padding-bottom: 20px;
+  font-size: 16px;
+  font-style: italic;
+}
+</style>

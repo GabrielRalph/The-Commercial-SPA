@@ -1,5 +1,5 @@
 <template>
-  <div id = "page" v-scroll = "onScroll">
+  <div id = "artlist-page" @scroll = "onScroll">
     <!-- Top button will appear when ever the user scrolls back up -->
     <div class = "top" :class = "{'hidden': top <= 0}" @click = "scrollTop">
       <h6>TOP</h6>
@@ -18,7 +18,7 @@
       <!-- Sorter -->
       <div class = "sort-hidden" :class = "{'sort-expand':sortExpand}">
         <div class = "sort-options-box" v-if = "sortExpand">
-          <h1 class = "sort-options-text" v-for = "(func, key) in sortMethods" @click = "sortExpand = !sortExpand; sortMethod = key" :key = "func">{{key}}</h1>
+          <h1 class = "sort-options-text" v-for = "(func, key) in sortMethods" @click = "sortExpand = !sortExpand; sortMethod = key" :key = "func + '-sorter'">{{key}}</h1>
         </div>
         <div class = "sort-cancel-box" v-if = "sortExpand" @click = "sortExpand = false">
           <h1 class = "sort-options-text">Cancel</h1>
@@ -29,7 +29,7 @@
       </div>
 
       <!-- List -->
-      <v-lazy v-for = "(artwork) in sortedArtworks" class = "display" @click = "navigate([2,0], artwork.id)" :key = "artwork.id">
+      <v-lazy v-for = "(artwork, key) in sortedArtworks" class = "display" @click = "artview(artwork)" :key = "key+'artwork_id'">
         <v-card :flat = "true">
           <v-img v-if = "artwork.image_url" :src = "artwork.image_url" :lazy-src = "artwork.thumb_url" ></v-img>
           <v-img v-else src = "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSG8YmmaJFVPwxwNtVDK0ASJ1IUA7IXPjp0_iWsxG6uFVOZ4SSa"></v-img>
@@ -41,7 +41,7 @@
                 <h4>{{artwork.first_name}} {{artwork.last_name}}</h4>
               </td>
               <td>
-                <h5 style = "text-align:right; font-size:10pt; float: right">{{artwork.year_from}}</h5>
+                <h5 style = "text-align:right; font-size:10pt; float: right">{{artwork.year}}</h5>
               </td>
             </tr>
           </table>
@@ -62,12 +62,11 @@
 </template>
 
 <script>
-import {bus} from '../databus.js'
+import {bus} from '../../databus.js'
 
 /* eslint no-console: ["error", { allow: ["log", "error"] }] */
 
 export default {
-
   data () {
     return {
       artworks: [],
@@ -83,10 +82,16 @@ export default {
           return b.price - a.price
         },
         'new - old': function(a, b){
-          return b.year_from - a.year_from
+          return b.year - a.year
         },
         'old - new': function(a, b){
-          return a.year_from - b.year_from
+          return a.year - b.year
+        },
+        'big - small': function(a, b){
+          return b.size - a.size
+        },
+        'small - big': function(a, b){
+          return a.size - b.size
         }
       },
       sortMethod: '$ - $$$$$'
@@ -97,22 +102,28 @@ export default {
     scrollTop(){
       this.top = 0;
       this.$vuetify.goTo(0);
+      document.getElementById('artlist-page').scrollTop = 0; 
     },
-    navigate(pos, dhl){
-      bus.$emit('navigate', pos, dhl, 'artwork');
+    artview(artwork){
+      bus.$emit('artview', artwork.artwork_profile_id, artwork.price_tile);
+      localStorage.id = artwork.artwork_profile_id;
+      localStorage.id_price_tile = artwork.price_tile;
+      localStorage.page = 'artview';
     },
     getList(filter){
       this.artist = '';
-      var name = null;
+      var name = 'get_collection/Selected available works/';
       if(filter.price){
-        name = 'get_artworks_by_price/'+filter.price+'/BETWEEN';
-      }else if(filter.size){
-        name = 'get_artworks_by_scale/'+filter.scale+'/BETWEEN';
+        name += 'filter_price/'+filter.price[0]+'/'+filter.price[1];
+      }else if(filter.scale){
+        this.sortMethod = 'small - big'
+        name += 'filter_scale/'+filter.scale[0]+'/'+filter.scale[1];
       }else if(filter.artists){
-        name = 'get_artworks_by_artists/'+filter.artists+'/IN';
+        name += 'filter_artists/('+filter.artists +')';
       }else if(filter.types){
-        name = 'get_artworks_by_types'+filter.types+'/IN';
+        name += 'filter_types/('+filter.types +')';
       }
+      console.log(name);
       bus.query(name, (artworks) => {
         this.artworks = artworks
         this.results = artworks.length;
@@ -120,6 +131,7 @@ export default {
       });
     },
     onScroll(e){
+      console.log("scroll");
       if (typeof window === 'undefined') return
       const top = window.pageYOffset ||   e.target.scrollTop || 0;
       if(top > 2500){
@@ -143,30 +155,28 @@ export default {
     }
   },
 
+
   created(){
-    if((localStorage.filter != 'undefined')&&(!!localStorage.filter)){
+    if(localStorage.filter){
       var dhl = JSON.parse(localStorage.filter);
       this.getList(dhl)
     }
-    bus.$on('navigate', (pos, dhl, name) => {
-      this.scrollTop()
-      this.loaded = 1
-      if((name == 'filter')&&(pos[0] == 2)&&(pos[1] == 1)){
-        this.artworks = []
-        this.getList(dhl)
-      }
+    bus.$on('artworks', (dhl) => {
+      console.log(dhl)
+      this.scrollTop();
+      this.artworks = [];
+      this.getList(dhl);
     })
   }
 }
 </script>
 
 <style scoped>
-#page{
+#artlist-page{
   margin: 0 20pt;
   overflow-y: scroll;
   overflow-x: hidden;
-  height: 100%;
-
+  height: 100vh;
 }
 .sort-header{
   position: relative;
